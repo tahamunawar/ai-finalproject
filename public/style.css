@@ -1,8 +1,8 @@
 body {
-    font-family: sans-serif;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    background-color: #f4f4f9;
-    color: #333;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
 }
 
 .container {
@@ -12,14 +12,16 @@ body {
 
 .sidebar {
     width: 250px;
-    background-color: #333;
+    background-color: #111;
     color: #fff;
     padding: 20px;
+    border-right: 1px solid #333;
 }
 
 .sidebar h2 {
     text-align: center;
     margin-bottom: 20px;
+    color: #00ffff;
 }
 
 .sidebar nav ul {
@@ -34,18 +36,28 @@ body {
     padding: 10px 15px;
     border-radius: 4px;
     margin-bottom: 10px;
+    transition: all 0.3s ease;
 }
 
 .sidebar nav ul li a.active,
 .sidebar nav ul li a:hover {
-    background-color: #575757;
+    background-color: #00ffff;
+    color: #111;
 }
 
+/* Main content */
 .main-content {
     flex-grow: 1;
     padding: 20px;
 }
 
+.main-content h1 {
+    color: #00ffff;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* Controls */
 .controls {
     margin-bottom: 20px;
 }
@@ -54,41 +66,69 @@ body {
     margin-right: 10px;
 }
 
-.controls input {
-    width: 60px;
+.controls input, 
+.controls select {
+    width: 80px;
     padding: 5px;
-    margin-right: 20px;
+    margin-right: 15px;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background-color: #222;
+    color: #fff;
 }
 
 .controls button {
     padding: 8px 15px;
     border: none;
-    background-color: #4CAF50;
-    color: white;
+    background-color: #00ffff;
+    color: #111;
     cursor: pointer;
     border-radius: 4px;
+    margin-right: 10px;
+    font-weight: bold;
+    transition: all 0.3s ease;
 }
 
 .controls button:hover {
-    background-color: #45a049;
+    background-color: #00d6d6;
 }
 
 .controls button:disabled {
-    background-color: #cccccc;
-    color: #666666;
+    background-color: #555;
+    color: #888;
     cursor: not-allowed;
 }
 
+/* Plot container */
 #plot {
     width: 100%;
     min-height: 500px;
-    border: 1px solid #ddd;
-    background-color: #fff;
+    border: 1px solid #333;
+    background-color: #111;
 }
 
+/* points */
+.point {
+    stroke: #000;
+    stroke-width: 1px;
+}
+
+/* centroids */
+.centroid {
+    stroke: #fff;
+    stroke-width: 2px;
+}
+
+/* Hulls / clusters */
+.hull {
+    fill-opacity: 0.15;
+    stroke-width: 2px;
+}
+
+/* Completion message */
 #completion-message {
     margin-top: 15px;
-    color: #2c7a31; /* A nice green color */
+    color: #00ff00; 
     font-weight: bold;
     text-align: center;
     width: 100%;

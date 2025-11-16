@@ -17,11 +17,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let svg, data, centroids, clusters, xScale, yScale;
     let visualizationInProgress = false;
     let iterationCount = 0;
-    const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+    
+    const colorScale = d3.scaleOrdinal()
+        .range(['#00ffff', '#ff00ff', '#ff4500', '#7fff00', '#ffd700', '#1e90ff']);
 
     function initializePlot() {
         visualizationInProgress = false;
-        Math.seedrandom(SEED); // Reset the global Math.random()
+        Math.seedrandom(SEED); // Reset random generator
         d3.select('#plot-svg').remove();
 
         svg = d3.select("#plot").append("svg")
@@ -30,23 +33,25 @@ document.addEventListener('DOMContentLoaded', () => {
             .attr("height", height + margin.top + margin.bottom)
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
-        
+
         xScale = d3.scaleLinear().domain([0, 100]).range([0, width]);
         yScale = d3.scaleLinear().domain([0, 100]).range([height, 0]);
 
         svg.append("g")
             .attr("transform", `translate(0,${height})`)
-            .call(d3.axisBottom(xScale));
-
+            .call(d3.axisBottom(xScale).tickSizeOuter(0))
+            .selectAll("text").style("fill", "#e0e0e0");
+        
         svg.append("g")
-            .call(d3.axisLeft(yScale));
+            .call(d3.axisLeft(yScale).tickSizeOuter(0))
+            .selectAll("text").style("fill", "#e0e0e0");
 
-        svg.append("g").attr("class", "hull-paths"); // Was previously voronoi-paths, renaming for clarity
+        svg.append("g").attr("class", "hull-paths");
 
         const numPoints = parseInt(pointsValueInput.value, 10);
         data = generateRandomData(numPoints);
         drawPoints(data);
-        
+
         startBtn.disabled = false;
         nextStepBtn.disabled = true;
         completionMessage.classList.add('hidden');
@@ -67,8 +72,16 @@ document.addEventListener('DOMContentLoaded', () => {
             .attr("class", "point")
             .attr("cx", d => xScale(d.x))
             .attr("cy", d => yScale(d.y))
-            .attr("r", 5)
-            .style("fill", "#ccc");
+            .attr("r", 6)
+            .style("fill", "#555")
+            .style("stroke", "#000")
+            .style("stroke-width", 1.5)
+            .on("mouseover", function (event, d) {
+                d3.select(this).transition().duration(100).attr("r", 9);
+            })
+            .on("mouseout", function (event, d) {
+                d3.select(this).transition().duration(100).attr("r", 6);
+            });
     }
 
     function drawCentroids(centroids) {
@@ -79,9 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .attr("class", "centroid")
             .attr("cx", d => xScale(d.x))
             .attr("cy", d => yScale(d.y))
-            .attr("r", 8)
+            .attr("r", 10)
             .style("fill", (d, i) => colorScale(i))
-            .style("stroke", "#000")
+            .style("stroke", "#fff")
             .style("stroke-width", 2);
     }
 
@@ -101,18 +114,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         clusters.forEach((cluster, i) => {
             if (cluster.length < 3) return;
-
             const points = cluster.map(p => [xScale(p.x), yScale(p.y)]);
             const hull = d3.polygonHull(points);
-
             if (hull) {
                 svg.select(".hull-paths").insert("path", ".point")
                     .attr("class", "hull")
                     .datum(hull)
                     .attr("d", d => `M${d.join("L")}Z`)
                     .style("fill", colorScale(i))
-                    .style("fill-opacity", 0.2)
                     .style("stroke", colorScale(i))
+                    .style("stroke-width", 2)
+                    .style("fill-opacity", 0.15)
                     .style("stroke-linejoin", "round");
             }
         });
@@ -125,11 +137,10 @@ document.addEventListener('DOMContentLoaded', () => {
             .transition().duration(500)
             .style("fill", (d) => {
                 for (let i = 0; i < clusters.length; i++) {
-                    if (clusters[i].includes(d)) {
+                    if (clusters[i].includes(d)) 
                         return colorScale(i);
-                    }
                 }
-                return "#ccc";
+                return "#555";
             });
         await new Promise(r => setTimeout(r, 700));
     }
@@ -180,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function forgyInitialization(k) {
         // Shuffle the data array and pick the first k points
         const shuffledData = shuffle([...data]);
-        return shuffledData.slice(0, k).map(d => ({...d}));
+        return shuffledData.slice(0, k).map(d => ({ ...d }));
     }
 
     function randomPartitionInitialization(k) {
@@ -275,9 +286,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function performNextStep() {
         if (!visualizationInProgress) return;
-        
         iterationCount++;
-        nextStepBtn.disabled = true; 
+        nextStepBtn.disabled = true;
 
         // Assignment step
         clusters = assignToClusters(data, centroids);
@@ -285,9 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Update step
         const newCentroids = updateCentroids(clusters);
-        
         const changed = JSON.stringify(centroids) !== JSON.stringify(newCentroids);
-        
+
         if (changed) {
             await visualizeCentroidUpdate(newCentroids);
             nextStepBtn.disabled = false; // Re-enable for next step
