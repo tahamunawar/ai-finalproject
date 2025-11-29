@@ -44,6 +44,15 @@
                     <label for="min-pts-value">Min Points:</label>
                     <input type="number" id="min-pts-value" value="3" min="1" max="20">
                 </div>
+
+                <div id="hierarchical-controls" class="hidden">
+                    <label for="linkage-method">Linkage Method:</label>
+                    <select id="linkage-method">
+                        <option value="single" selected>Single</option>
+                        <option value="complete">Complete</option>
+                        <option value="average">Average</option>
+                    </select>
+                </div>
                 
                 <hr>
 
@@ -68,7 +77,10 @@
                 <div id="completion-message" class="hidden"></div>
             </div>
             <div id="plot-container">
-                <div id="plot"></div>
+                <div id="plot-container-inner" class="single-plot">
+                    <div id="plot"></div>
+                    <div id="dendrogram" class="hidden"></div>
+                </div>
             </div>
         </main>
     </div>
@@ -78,6 +90,7 @@
     <script src="plot.js" defer></script>
     <script src="kmeans.js" defer></script>
     <script src="dbscan.js" defer></script>
+    <script src="hierarchical.js" defer></script>
     <script src="script.js" defer></script>
 </body>
 </html>

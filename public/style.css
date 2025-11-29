@@ -118,14 +118,50 @@ body {
 }
 
 /* Plot container */
+#plot-container-inner {
+    width: 100%;
+    display: flex;
+    gap: 20px;
+}
+
+#plot-container-inner.single-plot {
+    justify-content: center;
+}
+
+#plot-container-inner.two-panel {
+    justify-content: space-between;
+}
+
 #plot {
-    width: 65%;
-    margin: 0 auto;
     border: 1px solid #333;
     background-color: #111;
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+#plot-container-inner.single-plot #plot {
+    width: 55%;
+    margin: 0 auto;
+}
+
+#plot-container-inner.two-panel #plot {
+    width: 45%;
+    flex-shrink: 0;
+}
+
+#dendrogram {
+    width: 50%;
+    border: 1px solid #333;
+    background-color: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+#dendrogram.hidden {
+    display: none;
 }
 
 /* points */
@@ -146,6 +182,18 @@ body {
     fill: none;
     stroke: red;
     stroke-width: 3px;
+}
+
+/* Dendrogram styles */
+.dendro-link {
+    stroke: #fff;
+    stroke-width: 2px;
+}
+
+.dendro-leaf {
+    fill: #fff;
+    stroke: #000;
+    stroke-width: 1px;
 }
 
 /* centroids */

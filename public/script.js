@@ -1,9 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
     const kmeansLink = document.getElementById('kmeans-link');
+    const hierarchicalLink = document.getElementById('hierarchical-link');
     const dbscanLink = document.getElementById('dbscan-link');
     const mainTitle = document.getElementById('main-title');
     const kmeansControls = document.getElementById('kmeans-controls');
+    const hierarchicalControls = document.getElementById('hierarchical-controls');
     const dbscanControls = document.getElementById('dbscan-controls');
+    const plotContainerInner = document.getElementById('plot-container-inner');
+    const dendrogramDiv = document.getElementById('dendrogram');
     const nextStepBtn = document.getElementById('next-step-btn');
     const autoplayBtn = document.getElementById('autoplay-btn');
     const fastforwardBtn = document.getElementById('fastforward-btn');
@@ -12,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pointsControl = document.getElementById('points-control');
     const shapeType = document.getElementById('shape-type');
 
-    let activeAlgorithm = 'kmeans'; // or 'dbscan'
+    let activeAlgorithm = 'kmeans'; // or 'hierarchical' or 'dbscan'
     let autoplayInterval = null; // Store the interval ID for auto-play
     let autoplayButtonGuard = null; // High-frequency interval to keep button disabled
     let isAutoplayActive = false; // Flag to track if auto-play is currently running
@@ -31,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const numPoints = getNumPoints();
         if (activeAlgorithm === 'kmeans') {
             window.KMeans.initializePlot(numPoints);
+        } else if (activeAlgorithm === 'hierarchical') {
+            window.Hierarchical.initializePlot(numPoints);
         } else {
             window.DBSCAN.initializePlot(numPoints);
         }
@@ -49,7 +55,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (algo === 'kmeans') {
             mainTitle.textContent = 'K-Means Clustering Visualizer';
             kmeansControls.classList.remove('hidden');
+            hierarchicalControls.classList.add('hidden');
             dbscanControls.classList.add('hidden');
+            plotContainerInner.classList.remove('two-panel');
+            plotContainerInner.classList.add('single-plot');
+            dendrogramDiv.classList.add('hidden');
+            nextStepBtn.style.display = 'inline-block';
+            autoplayBtn.style.display = 'inline-block';
+            fastforwardBtn.style.display = 'inline-block';
+            autoplayBtn.disabled = true; // Disable until start is pressed
+            reinitializeCurrentAlgorithmPlot();
+        } else if (algo === 'hierarchical') {
+            mainTitle.textContent = 'Hierarchical Clustering Visualizer';
+            hierarchicalControls.classList.remove('hidden');
+            kmeansControls.classList.add('hidden');
+            dbscanControls.classList.add('hidden');
+            plotContainerInner.classList.remove('single-plot');
+            plotContainerInner.classList.add('two-panel');
+            dendrogramDiv.classList.remove('hidden');
             nextStepBtn.style.display = 'inline-block';
             autoplayBtn.style.display = 'inline-block';
             fastforwardBtn.style.display = 'inline-block';
@@ -58,7 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (algo === 'dbscan') {
             mainTitle.textContent = 'DBSCAN Clustering Visualizer';
             dbscanControls.classList.remove('hidden');
+            hierarchicalControls.classList.add('hidden');
             kmeansControls.classList.add('hidden');
+            plotContainerInner.classList.remove('two-panel');
+            plotContainerInner.classList.add('single-plot');
+            dendrogramDiv.classList.add('hidden');
             nextStepBtn.style.display = 'inline-block'; // Enable for DBSCAN step-by-step
             autoplayBtn.style.display = 'inline-block';
             fastforwardBtn.style.display = 'inline-block';
@@ -70,6 +97,11 @@ document.addEventListener('DOMContentLoaded', () => {
     kmeansLink.addEventListener('click', (e) => {
         e.preventDefault();
         switchAlgorithm('kmeans');
+    });
+
+    hierarchicalLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        switchAlgorithm('hierarchical');
     });
 
     dbscanLink.addEventListener('click', (e) => {
@@ -116,6 +148,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Re-enable next step button if visualization is still in progress
             const isInProgress = activeAlgorithm === 'kmeans'
                 ? window.KMeans.isVisualizationInProgress()
+                : activeAlgorithm === 'hierarchical'
+                ? window.Hierarchical.isVisualizationInProgress()
                 : window.DBSCAN.isVisualizationInProgress();
             if (isInProgress) {
                 nextStepBtn.disabled = false;
@@ -139,6 +173,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Start visualization first if not already started
             if (activeAlgorithm === 'kmeans') {
                 window.KMeans.startVisualization();
+            } else if (activeAlgorithm === 'hierarchical') {
+                window.Hierarchical.startVisualization();
             } else {
                 window.DBSCAN.startVisualization();
             }
@@ -170,6 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const stillInProgress = activeAlgorithm === 'kmeans'
                 ? window.KMeans.isVisualizationInProgress()
+                : activeAlgorithm === 'hierarchical'
+                ? window.Hierarchical.isVisualizationInProgress()
                 : window.DBSCAN.isVisualizationInProgress();
 
             if (stillInProgress) {
@@ -179,6 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Perform next step (await to ensure it completes)
                 if (activeAlgorithm === 'kmeans') {
                     await window.KMeans.performNextStep();
+                } else if (activeAlgorithm === 'hierarchical') {
+                    await window.Hierarchical.performNextStep();
                 } else {
                     await window.DBSCAN.performNextStep();
                 }
@@ -195,6 +235,8 @@ document.addEventListener('DOMContentLoaded', () => {
         stopAutoplay(); // Stop auto-play if running
         if (activeAlgorithm === 'kmeans') {
             window.KMeans.startVisualization();
+        } else if (activeAlgorithm === 'hierarchical') {
+            window.Hierarchical.startVisualization();
         } else {
             window.DBSCAN.startVisualization(); // DBSCAN start will now be iterative
         }
@@ -205,6 +247,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (autoplayInterval) return; // Don't allow manual steps during auto-play
         if (activeAlgorithm === 'kmeans') {
             window.KMeans.performNextStep();
+        } else if (activeAlgorithm === 'hierarchical') {
+            window.Hierarchical.performNextStep();
         } else {
             window.DBSCAN.performNextStep(); // Call DBSCAN's next step
         }
@@ -218,6 +262,8 @@ document.addEventListener('DOMContentLoaded', () => {
         stopAutoplay(); // Stop auto-play if running
         if (activeAlgorithm === 'kmeans') {
             window.KMeans.fastForward();
+        } else if (activeAlgorithm === 'hierarchical') {
+            window.Hierarchical.fastForward();
         } else {
             window.DBSCAN.fastForward();
         }
