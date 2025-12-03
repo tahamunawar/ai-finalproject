@@ -29,50 +29,92 @@ window.DBSCAN = (() => {
         visualizationInProgress = false;
         Math.seedrandom(SEED);
         
-        const plot = window.Plot.initialize('plot');
-        svg = plot.svg;
-        xScale = plot.xScale;
-        yScale = plot.yScale;
+        // Let CSS handle the sizing of the container. We just read it.
+        const plotDiv = document.getElementById('plot');
+        d3.select('#plot > svg').remove();
+
+        const margin = { top: 50, right: 40, bottom: 50, left: 60 };
+        
+        // Calculate width based on the CSS-driven container size
+        const width = plotDiv.clientWidth - margin.left - margin.right;
+        const height = plotDiv.clientHeight - margin.top - margin.bottom;
+        
+        const totalWidth = width + margin.left + margin.right;
+        const totalHeight = height + margin.top + margin.bottom;
+
+        svg = d3.select("#plot").append("svg")
+            .attr("id", "plot-svg")
+            .attr("width", totalWidth)
+            .attr("height", totalHeight)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        xScale = d3.scaleLinear().domain([0, 100]).range([0, width]);
+        yScale = d3.scaleLinear().domain([0, 100]).range([height, 0]);
+
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(xScale).tickSizeOuter(0))
+            .selectAll("text").style("fill", "#e0e0e0").style("font-size", "14px");
+        
+        svg.append("g")
+            .call(d3.axisLeft(yScale).tickSizeOuter(0))
+            .selectAll("text").style("fill", "#e0e0e0").style("font-size", "14px");
 
         // Remove any existing status text
         svg.selectAll(".status-text").remove();
         
-        // Create status text element in the top margin area (negative y to position above the plot)
+        // Create status text element in the top margin area
         statusText = svg.append("text")
             .attr("class", "status-text")
             .attr("x", 10)
-            .attr("y", -25) // Position in the top margin area, above the plot
+            .attr("y", -25)
             .style("fill", "#00ffff")
-            .style("font-size", "14px")
+            .style("font-size", "16px") // Slightly larger font for larger plot
             .style("font-weight", "bold")
             .text("");
 
         const shape = document.getElementById("shape-type").value;
         data = window.Shapes.generateDataByShape(shape, numPoints);
 
-        // Initialize states and cluster IDs
+        // --- FIX START: Explicitly reset all state variables ---
         pointStates = new Array(data.length).fill('UNVISITED');
-        pointClusterIds = new Array(data.length).fill(0); // 0 means not assigned to any cluster
+        pointClusterIds = new Array(data.length).fill(0); 
         visitedPoints.clear();
         currentPointIndex = 0;
         clusterIdCounter = 0;
+        expandingQueue = []; // <-- This was missing
+        visualizationInProgress = false; // Ensure this is reset too
+
+        // Hide and clear the queue visualization
+        document.getElementById('queue-container').classList.add('hidden');
+        updateQueueVisualization(); // <-- This was missing
+        // --- FIX END ---
 
         drawPoints(data);
 
         startBtn.disabled = false;
-        // nextStepBtn will be enabled by script.js
         completionMessage.classList.add('hidden');
     }
 
     function drawPoints(points) {
-        svg.selectAll(".point").remove();
-        svg.selectAll(".point")
+        svg.selectAll(".point-group").remove(); // Remove groups instead of just circles
+
+        const pointGroups = svg.selectAll(".point-group")
             .data(points)
-            .enter().append("circle")
+            .enter().append("g")
+            .attr("class", "point-group")
+            .attr("transform", d => `translate(${xScale(d.x)}, ${yScale(d.y)})`);
+
+        // Draw the circle
+        pointGroups.append("circle")
             .attr("class", "point")
-            .attr("cx", d => xScale(d.x))
-            .attr("cy", d => yScale(d.y))
-            .attr("r", 6)
+            .attr("r", (d, i) => {
+                // Even larger sizes for the scaled up plot
+                if (pointStates[i] === 'CORE') return 18; 
+                if (pointStates[i] === 'BORDER') return 14;
+                return 12; 
+            })
             .style("fill", (d, i) => {
                 // Priority: cluster color > state color
                 if (pointClusterIds[i] !== 0) {
@@ -82,12 +124,31 @@ window.DBSCAN = (() => {
                 // Point doesn't belong to a cluster - use state color
                 if (pointStates[i] === 'UNVISITED') return unvisitedColor;
                 if (pointStates[i] === 'NOISE') return noiseColor;
-                if (pointStates[i] === 'CORE') return corePointColor;
+                if (pointStates[i] === 'CORE') return corePointColor; 
                 if (pointStates[i] === 'BORDER') return borderPointColor;
                 return unvisitedColor;
             })
-            .style("stroke", "#000")
-            .style("stroke-width", 1.5);
+            .style("fill-opacity", (d, i) => {
+                return pointStates[i] === 'BORDER' ? 0.7 : 1.0;
+            })
+            .style("stroke", (d, i) => {
+                if (expandingQueue.includes(i)) return "#FF8C00";
+                return "#000";
+            })
+            .style("stroke-width", (d, i) => {
+                if (expandingQueue.includes(i)) return 3;
+                return 1.5;
+            });
+
+        // Add Text Numbers
+        pointGroups.append("text")
+            .attr("dy", ".35em") // Vertical center
+            .attr("text-anchor", "middle")
+            .style("font-size", "12px") // Larger font
+            .style("font-weight", "bold")
+            .style("fill", "#fff") // Always white
+            .style("pointer-events", "none") 
+            .text((d, i) => i + 1);
     }
 
     function startVisualization() {
@@ -104,6 +165,10 @@ window.DBSCAN = (() => {
         currentPointIndex = 0;
         clusterIdCounter = 0;
         expandingQueue = []; // Reset the expansion queue
+        
+        document.getElementById('queue-container').classList.add('hidden'); // Hide initially
+        updateQueueVisualization();
+
         drawPoints(data); // Redraw with unvisited state
 
         performNextStep(); // Start the first step automatically
@@ -158,12 +223,13 @@ window.DBSCAN = (() => {
         const epsilon = parseFloat(document.getElementById('epsilon-value').value);
         const minPts = parseInt(document.getElementById('min-pts-value').value, 10);
 
-        // Visualize epsilon neighborhood
-        svg.append("circle")
+        // Visualize epsilon neighborhood - NOW USING AN ELLIPSE for correctness on non-square plots
+        svg.append("ellipse")
             .attr("class", "epsilon-circle")
             .attr("cx", xScale(point.x))
             .attr("cy", yScale(point.y))
-            .attr("r", xScale(epsilon) - xScale(0)) // Convert epsilon from data units to pixel units
+            .attr("rx", xScale(epsilon) - xScale(0)) // Horizontal radius based on x-scale
+            .attr("ry", yScale(0) - yScale(epsilon)) // Vertical radius based on y-scale
             .style("fill", "lightblue")
             .style("fill-opacity", 0.2)
             .style("stroke", "blue")
@@ -185,6 +251,26 @@ window.DBSCAN = (() => {
             clusterIdCounter++;
             pointClusterIds[currentPointIndex] = clusterIdCounter;
             expandingQueue = [...neighbors]; // Initialize queue for expansion
+            
+            // Show queue container
+            document.getElementById('queue-container').classList.remove('hidden');
+            updateQueueVisualization();
+
+        // Visualize Reachability: Draw lines to all neighbors
+        neighbors.forEach(nIndex => {
+            const target = data[nIndex];
+            svg.insert("line", ".point-group") // Draw behind point groups
+                .attr("class", "connection-line")
+                .attr("x1", xScale(point.x))
+                .attr("y1", yScale(point.y))
+                .attr("x2", xScale(target.x))
+                .attr("y2", yScale(target.y))
+                .style("stroke", colorScale(clusterIdCounter - 1))
+                .style("stroke-width", 2)
+                .style("stroke-opacity", 0.5)
+                .style("stroke-dasharray", "4,4");
+        });
+
             if (statusText) {
                 statusText.text(`Point ${currentPointIndex + 1} is a CORE point! Starting cluster ${clusterIdCounter} with ${neighbors.length} neighbors.`);
             }
@@ -197,6 +283,34 @@ window.DBSCAN = (() => {
         }
 
         drawPoints(data); // Redraw points with updated states
+        updateQueueVisualization(); // Update the queue UI
+    }
+
+    function updateQueueVisualization() {
+        const queueContainer = document.getElementById('queue-container');
+        const queueList = document.getElementById('queue-list');
+        
+        // Only show queue container during visualization and if we are not in fast forward
+        // (or always show it if DBSCAN is active)
+        if (!visualizationInProgress && expandingQueue.length === 0) {
+             // Optionally hide it or keep empty
+             // queueContainer.classList.add('hidden'); 
+             // Let's keep it visible but empty if we want consistent layout, 
+             // or hide it. For now, let's show it when DBSCAN is selected/running.
+        }
+        
+        queueList.innerHTML = ''; // Clear existing
+
+        // Show current queue items
+        expandingQueue.forEach((pointIndex, i) => {
+            const div = document.createElement('div');
+            div.className = 'queue-item';
+            div.textContent = pointIndex + 1; // 1-based index
+            if (i === 0) {
+                div.classList.add('active'); // Highlight the next item to be processed
+            }
+            queueList.appendChild(div);
+        });
     }
 
     async function continueExpandingCluster() {
@@ -225,6 +339,8 @@ window.DBSCAN = (() => {
         const currentNeighborIndex = expandingQueue.shift();
         const currentNeighborPoint = data[currentNeighborIndex];
 
+        updateQueueVisualization();
+
         // Highlight the current neighbor being processed
         svg.append("circle")
             .attr("class", "current-point-highlight")
@@ -235,12 +351,13 @@ window.DBSCAN = (() => {
             .style("stroke", "red")
             .style("stroke-width", 3);
 
-        // Visualize epsilon neighborhood for this neighbor
-        svg.append("circle")
+        // Visualize epsilon neighborhood for this neighbor - NOW USING AN ELLIPSE
+        svg.append("ellipse")
             .attr("class", "epsilon-circle")
             .attr("cx", xScale(currentNeighborPoint.x))
             .attr("cy", yScale(currentNeighborPoint.y))
-            .attr("r", xScale(epsilon) - xScale(0))
+            .attr("rx", xScale(epsilon) - xScale(0))
+            .attr("ry", yScale(0) - yScale(epsilon))
             .style("fill", "lightblue")
             .style("fill-opacity", 0.2)
             .style("stroke", "blue")
@@ -286,6 +403,24 @@ window.DBSCAN = (() => {
                     newNeighbors.push(nnIndex);
                 }
             }
+            
+            updateQueueVisualization();
+
+        // Visualize Reachability: Draw lines to NEW neighbors
+        newNeighbors.forEach(nIndex => {
+            const target = data[nIndex];
+            svg.insert("line", ".point-group") // Draw behind point groups
+                .attr("class", "connection-line")
+                .attr("x1", xScale(currentNeighborPoint.x))
+                .attr("y1", yScale(currentNeighborPoint.y))
+                .attr("x2", xScale(target.x))
+                .attr("y2", yScale(target.y))
+                .style("stroke", colorScale(currentClusterId - 1))
+                .style("stroke-width", 2)
+                .style("stroke-opacity", 0.5)
+                .style("stroke-dasharray", "4,4");
+        });
+
             if (statusText) {
                 statusText.text(`Neighbor ${currentNeighborIndex + 1} is a CORE point! Added ${newNeighbors.length} new neighbors to expansion queue.`);
             }

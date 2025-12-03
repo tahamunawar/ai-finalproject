@@ -102,6 +102,97 @@ window.Shapes = (() => {
         return result;
     }
 
+    function generateElongatedGaussianCloud(count) {
+        const points = [];
+        const centerX = 50;
+        const centerY = 50;
+        
+        function randn_bm() {
+            let u = 0, v = 0;
+            while(u === 0) u = Math.random();
+            while(v === 0) v = Math.random();
+            return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+        }
+
+        // Rotate 45 degrees
+        const angle = Math.PI / 4;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+
+        for(let i=0; i<count; i++) {
+            // Generate in axis-aligned space first
+            // Long axis x, short axis y
+            const xRaw = randn_bm() * 25; 
+            const yRaw = randn_bm() * 5;
+
+            // Rotate
+            const xRot = xRaw * cos - yRaw * sin;
+            const yRot = xRaw * sin + yRaw * cos;
+
+            points.push({
+                x: Math.max(0, Math.min(100, centerX + xRot)),
+                y: Math.max(0, Math.min(100, centerY + yRot))
+            });
+        }
+        return points;
+    }
+
+    function generateTwoClustersDiagonally(count) {
+        const points = [];
+        const count1 = Math.floor(count / 2);
+        const count2 = count - count1;
+        
+        function randn_bm() {
+            let u = 0, v = 0;
+            while(u === 0) u = Math.random();
+            while(v === 0) v = Math.random();
+            return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+        }
+
+        // Cluster 1: (30, 70)
+        for(let i=0; i<count1; i++) {
+            points.push({
+                x: Math.max(0, Math.min(100, 25 + randn_bm() * 6)),
+                y: Math.max(0, Math.min(100, 75 + randn_bm() * 6))
+            });
+        }
+
+        // Cluster 2: (70, 30)
+        for(let i=0; i<count2; i++) {
+            points.push({
+                x: Math.max(0, Math.min(100, 75 + randn_bm() * 6)),
+                y: Math.max(0, Math.min(100, 25 + randn_bm() * 6))
+            });
+        }
+
+        return points;
+    }
+
+    function generateThinSCurve(count) {
+        const points = [];
+        // S-curve function: x from 20 to 80
+        // y = 50 + 30 * sin( (x-20)/60 * 2*PI ) or similar
+
+        for(let i=0; i<count; i++) {
+            const t = Math.random(); // 0 to 1
+            const x = 20 + t * 60;
+            // Sine wave for S shape
+            // We want roughly one full cycle or half cycle? S usually implies half-ish or full.
+            // Let's do a nice smooth curve.
+            const y = 50 + 30 * Math.sin((t - 0.5) * Math.PI * 1.5); // -0.75pi to 0.75pi
+
+            // Add noise
+            const noiseX = (Math.random() - 0.5) * 4;
+            const noiseY = (Math.random() - 0.5) * 4;
+
+            points.push({
+                x: Math.max(0, Math.min(100, x + noiseX)),
+                y: Math.max(0, Math.min(100, y + noiseY))
+            });
+        }
+        return points;
+    }
+
 
 
     function generateSpiralData(count) {
@@ -128,6 +219,9 @@ window.Shapes = (() => {
             case "moons": return generateMoons(count);
             case "spiral": return generateSpiralData(count);
             case "gaussian": return generateGaussianBlobs(count);
+            case "elongated": return generateElongatedGaussianCloud(count);
+            case "diagonal": return generateTwoClustersDiagonally(count);
+            case "scurve": return generateThinSCurve(count);
             default: return generateRandomData(count);
         }
     }

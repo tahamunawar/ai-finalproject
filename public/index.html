@@ -15,6 +15,7 @@
                     <li><a href="#" class="active" id="kmeans-link">K-Means</a></li>
                     <li><a href="#" id="hierarchical-link">Hierarchical</a></li>
                     <li><a href="#" id="dbscan-link">DBSCAN</a></li>
+                    <li><a href="#" id="pca-link">PCA</a></li>
                 </ul>
             </nav>
         </aside>
@@ -53,6 +54,14 @@
                         <option value="average">Average</option>
                     </select>
                 </div>
+
+                <div id="pca-controls" class="hidden">
+                    <label for="pc-select">Project onto:</label>
+                    <select id="pc-select" disabled>
+                        <option value="pc1" selected>PC1 (Largest Variance)</option>
+                        <option value="pc2">PC2</option>
+                    </select>
+                </div>
                 
                 <hr>
 
@@ -75,6 +84,11 @@
                 <button id="fastforward-btn">Fast Forward</button>
                 <button id="reset-btn">Reset</button></div>
                 <div id="completion-message" class="hidden"></div>
+                
+                <div id="queue-container" class="hidden">
+                    <h3>Expansion Queue:</h3>
+                    <div id="queue-list"></div>
+                </div>
             </div>
             <div id="plot-container">
                 <div id="plot-container-inner" class="single-plot">
@@ -91,6 +105,7 @@
     <script src="kmeans.js" defer></script>
     <script src="dbscan.js" defer></script>
     <script src="hierarchical.js" defer></script>
+    <script src="pca.js" defer></script>
     <script src="script.js" defer></script>
 </body>
 </html>

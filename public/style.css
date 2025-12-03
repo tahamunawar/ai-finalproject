@@ -150,6 +150,14 @@ body {
     flex-shrink: 0;
 }
 
+/* --- NEW: Special layout for DBSCAN --- */
+#plot-container-inner.dbscan-view #plot {
+    width: 70%; /* Make the plot container much wider */
+    height: 700px; /* Give it a fixed, larger height */
+    flex-shrink: 0; /* Prevent it from shrinking */
+}
+/* --- END NEW --- */
+
 #dendrogram {
     width: 50%;
     border: 1px solid #333;
@@ -162,6 +170,49 @@ body {
 
 #dendrogram.hidden {
     display: none;
+}
+
+/* Queue Visualization */
+#queue-container {
+    margin-top: 20px;
+    border: 1px solid #333;
+    background-color: #222;
+    padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#queue-container h3 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    color: #FFD700;
+}
+
+#queue-list {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    min-height: 30px;
+}
+
+.queue-item {
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    background-color: #444;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    border: 1px solid #666;
+    flex-shrink: 0;
+}
+
+.queue-item.active {
+    border: 2px solid #FFD700;
+    box-shadow: 0 0 5px #FFD700;
 }
 
 /* points */

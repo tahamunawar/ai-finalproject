@@ -2,10 +2,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const kmeansLink = document.getElementById('kmeans-link');
     const hierarchicalLink = document.getElementById('hierarchical-link');
     const dbscanLink = document.getElementById('dbscan-link');
+    const pcaLink = document.getElementById('pca-link'); // Added
     const mainTitle = document.getElementById('main-title');
     const kmeansControls = document.getElementById('kmeans-controls');
     const hierarchicalControls = document.getElementById('hierarchical-controls');
     const dbscanControls = document.getElementById('dbscan-controls');
+    const pcaControls = document.getElementById('pca-controls'); // Added
     const plotContainerInner = document.getElementById('plot-container-inner');
     const dendrogramDiv = document.getElementById('dendrogram');
     const nextStepBtn = document.getElementById('next-step-btn');
@@ -16,19 +18,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const pointsControl = document.getElementById('points-control');
     const shapeType = document.getElementById('shape-type');
 
-    let activeAlgorithm = 'kmeans'; // or 'hierarchical' or 'dbscan'
+    // Store original options
+    const originalShapeOptions = Array.from(shapeType.options).map(opt => ({ value: opt.value, text: opt.text }));
+
+    function updateShapeOptions(algo) {
+        shapeType.innerHTML = '';
+        
+        if (algo === 'pca') {
+            const pcaOptions = [
+                { value: 'elongated', text: 'Elongated Gaussian Cloud' },
+                { value: 'diagonal', text: 'Two Clusters Spread Diagonally' },
+                { value: 'scurve', text: 'Thin S-curve' },
+                { value: 'random', text: 'Random' }
+            ];
+            
+            pcaOptions.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.text = opt.text;
+                shapeType.appendChild(option);
+            });
+            shapeType.value = 'elongated';
+        } else {
+            originalShapeOptions.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.text = opt.text;
+                if (opt.value === 'random') option.selected = true;
+                shapeType.appendChild(option);
+            });
+            shapeType.value = 'random';
+        }
+        // Trigger input event to handle UI state (points control visibility)
+        shapeType.dispatchEvent(new Event('input'));
+    }
+
+    let activeAlgorithm = 'kmeans'; // or 'hierarchical' or 'dbscan' or 'pca'
     let autoplayInterval = null; // Store the interval ID for auto-play
     let autoplayButtonGuard = null; // High-frequency interval to keep button disabled
     let isAutoplayActive = false; // Flag to track if auto-play is currently running
 
     function getNumPoints() {
-        if (shapeType.value === 'random') {
-            return parseInt(document.getElementById('points-value').value, 10);
-        }
-        if (shapeType.value === 'circle') {
-            return 400;
-        }
-        return 75;
+        // This function is now simplified: it ALWAYS reads from the input.
+        return parseInt(document.getElementById('points-value').value, 10);
     }
 
     function reinitializeCurrentAlgorithmPlot() {
@@ -37,8 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
             window.KMeans.initializePlot(numPoints);
         } else if (activeAlgorithm === 'hierarchical') {
             window.Hierarchical.initializePlot(numPoints);
-        } else {
+        } else if (activeAlgorithm === 'dbscan') {
             window.DBSCAN.initializePlot(numPoints);
+        } else if (activeAlgorithm === 'pca') {
+            window.PCA.initializePlot(numPoints);
         }
     }
 
@@ -46,19 +80,27 @@ document.addEventListener('DOMContentLoaded', () => {
     function switchAlgorithm(algo) {
         activeAlgorithm = algo;
 
+        // Update shape options based on algorithm
+        updateShapeOptions(algo);
+
         // Update active link
         document.querySelectorAll('.sidebar nav ul li a').forEach(link => link.classList.remove('active'));
         document.getElementById(`${algo}-link`).classList.add('active');
 
         stopAutoplay(); // Stop auto-play when switching algorithms (this also stops the guard)
         
+        // Hide all controls first
+        kmeansControls.classList.add('hidden');
+        hierarchicalControls.classList.add('hidden');
+        dbscanControls.classList.add('hidden');
+        if (pcaControls) pcaControls.classList.add('hidden');
+
         if (algo === 'kmeans') {
             mainTitle.textContent = 'K-Means Clustering Visualizer';
             kmeansControls.classList.remove('hidden');
-            hierarchicalControls.classList.add('hidden');
-            dbscanControls.classList.add('hidden');
             plotContainerInner.classList.remove('two-panel');
             plotContainerInner.classList.add('single-plot');
+            plotContainerInner.classList.remove('dbscan-view'); // Ensure DBSCAN view is off
             dendrogramDiv.classList.add('hidden');
             nextStepBtn.style.display = 'inline-block';
             autoplayBtn.style.display = 'inline-block';
@@ -68,10 +110,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (algo === 'hierarchical') {
             mainTitle.textContent = 'Hierarchical Clustering Visualizer';
             hierarchicalControls.classList.remove('hidden');
-            kmeansControls.classList.add('hidden');
-            dbscanControls.classList.add('hidden');
             plotContainerInner.classList.remove('single-plot');
             plotContainerInner.classList.add('two-panel');
+            plotContainerInner.classList.remove('dbscan-view'); // Ensure DBSCAN view is off
             dendrogramDiv.classList.remove('hidden');
             nextStepBtn.style.display = 'inline-block';
             autoplayBtn.style.display = 'inline-block';
@@ -81,15 +122,26 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (algo === 'dbscan') {
             mainTitle.textContent = 'DBSCAN Clustering Visualizer';
             dbscanControls.classList.remove('hidden');
-            hierarchicalControls.classList.add('hidden');
-            kmeansControls.classList.add('hidden');
             plotContainerInner.classList.remove('two-panel');
             plotContainerInner.classList.add('single-plot');
+            plotContainerInner.classList.add('dbscan-view'); // Activate special DBSCAN view
             dendrogramDiv.classList.add('hidden');
-            nextStepBtn.style.display = 'inline-block'; // Enable for DBSCAN step-by-step
+            nextStepBtn.style.display = 'inline-block'; 
             autoplayBtn.style.display = 'inline-block';
             fastforwardBtn.style.display = 'inline-block';
             autoplayBtn.disabled = true; // Disable until start is pressed
+            reinitializeCurrentAlgorithmPlot();
+        } else if (algo === 'pca') {
+            mainTitle.textContent = 'Principal Component Analysis';
+            if (pcaControls) pcaControls.classList.remove('hidden');
+            plotContainerInner.classList.remove('two-panel');
+            plotContainerInner.classList.add('single-plot');
+            plotContainerInner.classList.remove('dbscan-view'); // Ensure DBSCAN view is off
+            dendrogramDiv.classList.add('hidden');
+            nextStepBtn.style.display = 'inline-block';
+            autoplayBtn.style.display = 'inline-block'; // PCA can use autoplay to step through
+            fastforwardBtn.style.display = 'none'; // Disable fast forward for PCA as it's about specific steps
+            autoplayBtn.disabled = true;
             reinitializeCurrentAlgorithmPlot();
         }
     }
@@ -108,6 +160,13 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         switchAlgorithm('dbscan');
     });
+
+    if (pcaLink) {
+        pcaLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchAlgorithm('pca');
+        });
+    }
 
     epsilonValue.addEventListener('input', (e) => {
         epsilonDisplay.textContent = e.target.value;
@@ -146,11 +205,12 @@ document.addEventListener('DOMContentLoaded', () => {
             autoplayBtn.disabled = false;
             
             // Re-enable next step button if visualization is still in progress
-            const isInProgress = activeAlgorithm === 'kmeans'
-                ? window.KMeans.isVisualizationInProgress()
-                : activeAlgorithm === 'hierarchical'
-                ? window.Hierarchical.isVisualizationInProgress()
-                : window.DBSCAN.isVisualizationInProgress();
+            let isInProgress = false;
+            if (activeAlgorithm === 'kmeans') isInProgress = window.KMeans.isVisualizationInProgress();
+            else if (activeAlgorithm === 'hierarchical') isInProgress = window.Hierarchical.isVisualizationInProgress();
+            else if (activeAlgorithm === 'dbscan') isInProgress = window.DBSCAN.isVisualizationInProgress();
+            else if (activeAlgorithm === 'pca') isInProgress = window.PCA.isVisualizationInProgress();
+
             if (isInProgress) {
                 nextStepBtn.disabled = false;
             }
@@ -165,19 +225,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Check if visualization is in progress
-        const isInProgress = activeAlgorithm === 'kmeans' 
-            ? window.KMeans.isVisualizationInProgress()
-            : window.DBSCAN.isVisualizationInProgress();
+        let isInProgress = false;
+        if (activeAlgorithm === 'kmeans') isInProgress = window.KMeans.isVisualizationInProgress();
+        else if (activeAlgorithm === 'dbscan') isInProgress = window.DBSCAN.isVisualizationInProgress();
+        else if (activeAlgorithm === 'hierarchical') isInProgress = window.Hierarchical.isVisualizationInProgress(); // Added check for hierarchical if needed, or assume false
+        else if (activeAlgorithm === 'pca') isInProgress = window.PCA.isVisualizationInProgress();
 
         if (!isInProgress) {
             // Start visualization first if not already started
-            if (activeAlgorithm === 'kmeans') {
-                window.KMeans.startVisualization();
-            } else if (activeAlgorithm === 'hierarchical') {
-                window.Hierarchical.startVisualization();
-            } else {
-                window.DBSCAN.startVisualization();
-            }
+            if (activeAlgorithm === 'kmeans') window.KMeans.startVisualization();
+            else if (activeAlgorithm === 'hierarchical') window.Hierarchical.startVisualization();
+            else if (activeAlgorithm === 'dbscan') window.DBSCAN.startVisualization();
+            else if (activeAlgorithm === 'pca') window.PCA.startVisualization();
         }
 
         // Update button state
@@ -204,31 +263,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const stillInProgress = activeAlgorithm === 'kmeans'
-                ? window.KMeans.isVisualizationInProgress()
-                : activeAlgorithm === 'hierarchical'
-                ? window.Hierarchical.isVisualizationInProgress()
-                : window.DBSCAN.isVisualizationInProgress();
+            let stillInProgress = false;
+            if (activeAlgorithm === 'kmeans') stillInProgress = window.KMeans.isVisualizationInProgress();
+            else if (activeAlgorithm === 'hierarchical') stillInProgress = window.Hierarchical.isVisualizationInProgress();
+            else if (activeAlgorithm === 'dbscan') stillInProgress = window.DBSCAN.isVisualizationInProgress();
+            else if (activeAlgorithm === 'pca') stillInProgress = window.PCA.isVisualizationInProgress();
 
             if (stillInProgress) {
                 // Ensure button stays disabled before performing step
                 nextStepBtn.disabled = true;
                 
                 // Perform next step (await to ensure it completes)
-                if (activeAlgorithm === 'kmeans') {
-                    await window.KMeans.performNextStep();
-                } else if (activeAlgorithm === 'hierarchical') {
-                    await window.Hierarchical.performNextStep();
-                } else {
-                    await window.DBSCAN.performNextStep();
-                }
+                if (activeAlgorithm === 'kmeans') await window.KMeans.performNextStep();
+                else if (activeAlgorithm === 'hierarchical') await window.Hierarchical.performNextStep();
+                else if (activeAlgorithm === 'dbscan') await window.DBSCAN.performNextStep();
+                else if (activeAlgorithm === 'pca') await window.PCA.performNextStep();
                 
                 // Button guard will keep it disabled
             } else {
                 // Algorithm finished, stop auto-play
                 stopAutoplay();
             }
-        }, 1000); // 1 second delay between steps
+        }, activeAlgorithm === 'pca' ? 4000 : 1000); // PCA needs more time for animations
     }
 
     startBtn.addEventListener('click', () => {
@@ -237,8 +293,10 @@ document.addEventListener('DOMContentLoaded', () => {
             window.KMeans.startVisualization();
         } else if (activeAlgorithm === 'hierarchical') {
             window.Hierarchical.startVisualization();
-        } else {
-            window.DBSCAN.startVisualization(); // DBSCAN start will now be iterative
+        } else if (activeAlgorithm === 'dbscan') {
+            window.DBSCAN.startVisualization();
+        } else if (activeAlgorithm === 'pca') {
+            window.PCA.startVisualization();
         }
         autoplayBtn.disabled = false; // Enable auto-play button after start
     });
@@ -249,8 +307,10 @@ document.addEventListener('DOMContentLoaded', () => {
             window.KMeans.performNextStep();
         } else if (activeAlgorithm === 'hierarchical') {
             window.Hierarchical.performNextStep();
-        } else {
-            window.DBSCAN.performNextStep(); // Call DBSCAN's next step
+        } else if (activeAlgorithm === 'dbscan') {
+            window.DBSCAN.performNextStep();
+        } else if (activeAlgorithm === 'pca') {
+            window.PCA.performNextStep();
         }
     });
 
@@ -264,9 +324,10 @@ document.addEventListener('DOMContentLoaded', () => {
             window.KMeans.fastForward();
         } else if (activeAlgorithm === 'hierarchical') {
             window.Hierarchical.fastForward();
-        } else {
+        } else if (activeAlgorithm === 'dbscan') {
             window.DBSCAN.fastForward();
         }
+        // PCA fast forward not implemented/enabled
     });
 
     const pointsValueInput = document.getElementById('points-value');
@@ -275,11 +336,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     shapeType.addEventListener('input', () => {
-        if (shapeType.value === 'random') {
-            pointsControl.classList.remove('hidden');
-        } else {
-            pointsControl.classList.add('hidden');
+        // Define default points for each shape
+        const defaultPoints = {
+            random: 150,
+            circle: 400,
+            moons: 75,
+            spiral: 75,
+            gaussian: 150,
+            // PCA-specific shapes
+            elongated: 150,
+            diagonal: 150,
+            scurve: 200,
+        };
+
+        const selectedShape = shapeType.value;
+        const pointsInput = document.getElementById('points-value');
+        
+        // Set the default value in the input field
+        if (defaultPoints[selectedShape]) {
+            pointsInput.value = defaultPoints[selectedShape];
         }
+
+        // The points control is now ALWAYS visible, so we remove the hide/show logic.
+        pointsControl.classList.remove('hidden');
+        
         reinitializeCurrentAlgorithmPlot();
     });
 });

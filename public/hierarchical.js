@@ -6,7 +6,7 @@ window.Hierarchical = (() => {
 
     // --- Configuration ---
     const SEED = 'unsupervised-learning-viz';
-    const MAX_Y_DOMAIN = 150; 
+    const MAX_Y_DOMAIN = 50; 
     
     // --- State Variables ---
     let plotSvg, dendrogramSvg;
