@@ -4,6 +4,7 @@ window.PCA = (() => {
     const completionMessage = document.getElementById('completion-message');
     const pcaControls = document.getElementById('pca-controls'); // Will need to add this to HTML
     const pcSelect = document.getElementById('pc-select'); // Will add this
+    const prevStepBtn = document.getElementById('prev-step-btn');
 
     const SEED = 'pca-viz';
     
@@ -19,12 +20,15 @@ window.PCA = (() => {
     let xScale, yScale;
     let visualizationInProgress = false;
     let stripSvg; // For 1D representation
+    let history = [];
 
     const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
 
     function initializePlot(numPoints) {
         visualizationInProgress = false;
         step = 0;
+        history = [];
+        prevStepBtn.disabled = true;
         Math.seedrandom(SEED);
 
         const plotDiv = document.getElementById('plot');
@@ -190,6 +194,8 @@ window.PCA = (() => {
         step = 0;
         startBtn.disabled = true;
         nextStepBtn.disabled = false;
+        prevStepBtn.disabled = true;
+        history = [];
         
         mean = calculateMean(dataRaw);
         dataCentered = centerData(dataRaw, mean); // Contains .x, .y (math) and .vx, .vy (visual)
@@ -206,15 +212,48 @@ window.PCA = (() => {
         if (!visualizationInProgress) return;
         nextStepBtn.disabled = true;
 
-        switch (step) {
-            case 0: // Show Mean
+        history.push(step); // Save current step before advancing
+        prevStepBtn.disabled = false;
+
+        // This switch-case will now render the state *after* the step counter is incremented.
+        // So when we call this, we are moving TO the new step.
+        step++; 
+        await renderStep(step);
+    }
+
+    async function performPrevStep() {
+        if (history.length === 0) {
+            prevStepBtn.disabled = true;
+            return;
+        }
+        
+        visualizationInProgress = true; // <-- THIS IS THE FIX
+        step = history.pop(); // Restore to the previous step number
+        
+        // Re-render the entire visualization from scratch up to the restored step
+        await reRenderToStep(step);
+
+        if (history.length === 0) {
+            prevStepBtn.disabled = true;
+        }
+        nextStepBtn.disabled = false;
+        completionMessage.classList.add('hidden');
+    }
+
+    // New function to render a specific step's visualization
+    async function renderStep(targetStep, withAnimation = true) {
+        const duration = withAnimation ? 1000 : 0;
+        const delay = withAnimation ? 1200 : 0;
+
+        switch (targetStep) {
+            case 1: // Show Mean
                 svg.append("circle")
                     .attr("class", "mean-point")
                     .attr("cx", xScale(mean.x))
                     .attr("cy", yScale(mean.y))
                     .attr("r", 0)
                     .style("fill", "red")
-                    .transition().duration(500)
+                    .transition().duration(duration / 2)
                     .attr("r", 8);
                 
                 svg.append("text")
@@ -223,68 +262,51 @@ window.PCA = (() => {
                     .attr("y", yScale(mean.y) - 10)
                     .text("Mean")
                     .style("opacity", 0)
-                    .style("fill", "white") // Changed text color to white
-                    .transition().duration(500)
+                    .style("fill", "white")
+                    .transition().duration(duration / 2)
                     .style("opacity", 1);
                 
-                await new Promise(r => setTimeout(r, 600));
-                step++;
-                nextStepBtn.disabled = false;
+                await new Promise(r => setTimeout(r, withAnimation ? 600 : 0));
+                if (withAnimation) nextStepBtn.disabled = false;
                 break;
 
-            case 1: // Center Data
-                // Fade out original points slightly
-                svg.selectAll(".point")
-                    .transition().duration(500)
-                    .style("opacity", 0.3);
-                
-                await new Promise(r => setTimeout(r, 500));
-
-                // Move points to centered location (Visual center 0,0)
-                // And move Mean to 0,0
+            case 2: // Center Data
                 svg.selectAll(".point")
                     .data(dataCentered, d => d.id)
-                    .transition().duration(1000)
+                    .transition().duration(duration)
                     .attr("cx", d => xScale(d.vx))
-                    .attr("cy", d => yScale(d.vy))
-                    .style("opacity", 0.8); // Bring back opacity
+                    .attr("cy", d => yScale(d.vy));
 
                 svg.select(".mean-point")
-                    .transition().duration(1000)
+                    .transition().duration(duration)
                     .attr("cx", xScale(0))
                     .attr("cy", yScale(0));
 
-                // Update Mean Label text to clarify it's (0,0) in new coordinates
                 svg.select(".mean-label")
-                    .transition().duration(1000)
+                    .transition().duration(duration)
                     .attr("x", xScale(0) + 10)
                     .attr("y", yScale(0) - 10)
-                    .text("Mean (0,0)")
-                    .style("fill", "white"); // Ensure it stays white
+                    .text("Mean (0,0)");
                 
-                await new Promise(r => setTimeout(r, 1200));
-                step++;
-                nextStepBtn.disabled = false;
+                await new Promise(r => setTimeout(r, delay));
+                if (withAnimation) nextStepBtn.disabled = false;
                 break;
 
-            case 2: // Covariance Ellipse
-                // Draw ellipse centered at 0,0
-                // rx = sqrt(lambda1) * scale, ry = sqrt(lambda2) * scale
-                // Angle based on eigenvector
-                
-                // Negate the angle because SVG Y-axis is inverted relative to standard math coordinates.
-                // Math: +Y is Up (Angle increases Counter-Clockwise)
-                // SVG: +Y is Down (Rotation is Clockwise)
-                // We need to rotate Counter-Clockwise to match the data slope.
+            case 3: // Covariance Ellipse
                 const angle = -Math.atan2(eigenvectors[0].y, eigenvectors[0].x) * 180 / Math.PI;
-                const scale = 1; 
+                const scale = 2; // Use 2 standard deviations for a better visual fit
                 
-                // Use D3 scales to convert variance (data units) to pixels
-                // xScale(val) - xScale(0) gives pixels for a length of 'val'
-                const rx = Math.sqrt(eigenvalues[0]) * scale * (xScale(1) - xScale(0));
-                const ry = Math.sqrt(eigenvalues[1]) * scale * (yScale(0) - yScale(1)); // Y is inverted
+                // The eigenvalue is the variance. Standard deviation is sqrt(variance).
+                const stdDev1 = Math.sqrt(eigenvalues[0]);
+                const stdDev2 = Math.sqrt(eigenvalues[1]);
+
+                // CORRECT WAY to get radius in pixels: 
+                // Find the pixel length of the standard deviation along each axis.
+                const rx = (xScale(stdDev1 * scale) - xScale(0));
+                const ry = (yScale(0) - yScale(stdDev2 * scale));
 
                 svg.append("ellipse")
+                    .attr("class", "covariance-ellipse")
                     .attr("cx", xScale(0))
                     .attr("cy", yScale(0))
                     .attr("rx", 0)
@@ -293,41 +315,35 @@ window.PCA = (() => {
                     .style("fill", "rgba(0, 255, 255, 0.1)")
                     .style("stroke", "cyan")
                     .style("stroke-width", 2)
-                    .transition().duration(1000)
+                    .transition().duration(duration)
                     .attr("rx", Math.abs(rx))
                     .attr("ry", Math.abs(ry));
 
-                await new Promise(r => setTimeout(r, 1200));
-                step++;
-                nextStepBtn.disabled = false;
+                await new Promise(r => setTimeout(r, delay));
+                if (withAnimation) nextStepBtn.disabled = false;
                 break;
 
-            case 3: // Eigenvectors
+            case 4: // Eigenvectors
                 const center = { x: xScale(0), y: yScale(0) };
-                const scaleVec = 2.5; // Increased scale for visibility (was 1.5)
+                const scaleVec = 2.5;
 
-                // PC1
-                drawArrow(center, eigenvectors[0], Math.sqrt(eigenvalues[0]) * scaleVec, "PC1 (λ1)", "blue");
-                // PC2
-                drawArrow(center, eigenvectors[1], Math.sqrt(eigenvalues[1]) * scaleVec, "PC2 (λ2)", "green");
+                drawArrow(center, eigenvectors[0], Math.sqrt(eigenvalues[0]) * scaleVec, "PC1 (λ1)", "blue", withAnimation);
+                drawArrow(center, eigenvectors[1], Math.sqrt(eigenvalues[1]) * scaleVec, "PC2 (λ2)", "green", withAnimation);
 
-                await new Promise(r => setTimeout(r, 1200));
-                step++;
-                nextStepBtn.disabled = false;
+                await new Promise(r => setTimeout(r, delay));
+                if (withAnimation) nextStepBtn.disabled = false;
                 break;
 
-            case 4: // Projection
-                const selectedPC = pcSelect ? pcSelect.value : 'pc1'; // 'pc1' or 'pc2'
+            case 5: // Projection
+                const selectedPC = pcSelect ? pcSelect.value : 'pc1';
                 const vec = selectedPC === 'pc1' ? eigenvectors[0] : eigenvectors[1];
                 
-                // Animate projection
-                projectPoints(vec);
+                projectPoints(vec, withAnimation);
                 
-                await new Promise(r => setTimeout(r, 3000)); // Wait for projection + strip
+                await new Promise(r => setTimeout(r, withAnimation ? 3000 : 0));
                 
-                step++;
-                nextStepBtn.disabled = true; // End of steps mostly
-                startBtn.disabled = false; // Allow restart
+                nextStepBtn.disabled = true;
+                startBtn.disabled = false;
                 visualizationInProgress = false;
                 if (completionMessage) {
                     completionMessage.textContent = "PCA Visualization Completed";
@@ -337,40 +353,57 @@ window.PCA = (() => {
         }
     }
 
-    function drawArrow(start, dir, length, label, color) {
+    // New function to redraw the entire plot up to a certain step without animations
+    async function reRenderToStep(targetStep) {
+        // 1. Clear everything
+        svg.selectAll(".mean-point, .mean-label, .covariance-ellipse, .arrow, .arrow-label, .proj-line").remove();
+        d3.select("#pca-strip").remove();
+
+        // 2. Reset points to their initial state
+        drawPoints(dataRaw);
+
+        // 3. Sequentially apply states up to the target step without animation
+        for (let i = 1; i <= targetStep; i++) {
+            await renderStep(i, false);
+        }
+    }
+
+    function drawArrow(start, dir, length, label, color, withAnimation = true) {
+        const duration = withAnimation ? 1000 : 0;
         const end = {
             x: start.x + dir.x * length * (xScale(1) - xScale(0)), 
-            y: start.y + dir.y * length * (yScale(1) - yScale(0)) // Note: yScale(1)-yScale(0) is negative (inverted Y)
+            y: start.y + dir.y * length * (yScale(1) - yScale(0))
         };
 
-        // d3 line
         svg.append("line")
+            .attr("class", "arrow")
             .attr("x1", start.x)
             .attr("y1", start.y)
-            .attr("x2", start.x) // Start at center and grow
-            .attr("y2", start.y)
+            .attr("x2", withAnimation ? start.x : end.x) // Start at center and grow
+            .attr("y2", withAnimation ? start.y : end.y)
             .style("stroke", color)
             .style("stroke-width", 3)
             .attr("marker-end", "url(#arrow)") 
-            .transition().duration(1000)
+            .transition().duration(duration)
             .attr("x2", end.x)
             .attr("y2", end.y);
 
-        // Offset text slightly away from vector tip to avoid clutter
         const textOffsetX = 15 * (dir.x >= 0 ? 1 : -1);
-        const textOffsetY = 15 * (dir.y >= 0 ? -1 : 1); // Inverted Y: -1 moves visually UP
+        const textOffsetY = 15 * (dir.y >= 0 ? -1 : 1);
 
         svg.append("text")
+            .attr("class", "arrow-label")
             .attr("x", end.x + textOffsetX)
             .attr("y", end.y + textOffsetY)
             .text(label)
             .style("fill", color)
-            .style("opacity", 0)
-            .transition().delay(1000).duration(500)
+            .style("opacity", withAnimation ? 0 : 1)
+            .transition().delay(duration).duration(500)
             .style("opacity", 1);
     }
 
-    function projectPoints(axisVector) {
+    function projectPoints(axisVector, withAnimation = true) {
+        const duration = withAnimation ? 1000 : 0;
         // Axis vector is unit vector.
         // Projection of P onto V is (P . V) * V
         // We are working with visual coordinates (centered at 50,50)
@@ -378,7 +411,7 @@ window.PCA = (() => {
         // 1. Draw dotted lines
         svg.selectAll(".proj-line").remove();
         
-        const visualData = svg.selectAll(".point").data(); // Get current data bound to points
+        const visualData = dataCentered.map(d => ({...d}));
         
         // Add projection info
         visualData.forEach(d => {
@@ -395,51 +428,49 @@ window.PCA = (() => {
         });
 
         svg.selectAll(".proj-line")
-            .data(visualData)
+            .data(visualData, d => d.id)
             .enter().append("line")
             .attr("class", "proj-line")
             .attr("x1", d => xScale(d.vx))
             .attr("y1", d => yScale(d.vy))
-            .attr("x2", d => xScale(d.vx))
-            .attr("y2", d => yScale(d.vy))
+            .attr("x2", d => withAnimation ? xScale(d.vx) : xScale(d.vProjX))
+            .attr("y2", d => withAnimation ? yScale(d.vy) : yScale(d.vProjY))
             .style("stroke", "#999")
             .style("stroke-dasharray", "3,3")
-            .transition().duration(1000)
+            .transition().duration(duration)
             .attr("x2", d => xScale(d.vProjX))
             .attr("y2", d => yScale(d.vProjY));
 
         // 2. Move points
         svg.selectAll(".point")
-            .transition().delay(1000).duration(1000)
+            .data(visualData, d => d.id)
+            .transition().delay(duration).duration(duration)
             .attr("cx", d => xScale(d.vProjX))
             .attr("cy", d => yScale(d.vProjY))
             .style("fill", "orange");
 
         // 3. Show 1D strip
-        setTimeout(() => show1DStrip(visualData, axisVector), 2000);
+        if (withAnimation) {
+            setTimeout(() => show1DStrip(visualData, axisVector), 2 * duration);
+        } else {
+            show1DStrip(visualData, axisVector);
+        }
     }
 
     function show1DStrip(data, axisVector) {
-        // Create a new SVG area below or inside
         const container = d3.select("#plot-container-inner");
         
-        // Check if strip exists
-        let strip = d3.select("#pca-strip");
-        if (strip.empty()) {
-            strip = container.append("div")
-                .attr("id", "pca-strip")
-                .style("margin-top", "20px")
-                .style("text-align", "center");
+        d3.select("#pca-strip").remove(); // Always remove to redraw
+        const strip = container.append("div")
+            .attr("id", "pca-strip")
+            .style("margin-top", "20px")
+            .style("text-align", "center");
                 
-            strip.append("h3").text("1D Representation");
-            
-            stripSvg = strip.append("svg")
-                .attr("width", "100%")
-                .attr("height", 60);
-        } else {
-             stripSvg = strip.select("svg");
-             stripSvg.selectAll("*").remove();
-        }
+        strip.append("h3").text("1D Representation");
+        
+        stripSvg = strip.append("svg")
+            .attr("width", "100%")
+            .attr("height", 60);
 
         const w = stripSvg.node().getBoundingClientRect().width;
         const h = 60;
@@ -459,7 +490,7 @@ window.PCA = (() => {
             .attr("y1", h/2)
             .attr("x2", w - 20)
             .attr("y2", h/2)
-            .style("stroke", "white"); // Changed from #000 to white
+            .style("stroke", "white");
 
         stripSvg.selectAll(".strip-point")
             .data(scalars)
@@ -468,10 +499,7 @@ window.PCA = (() => {
             .attr("cx", d => stripScale(d))
             .attr("cy", h/2)
             .attr("r", 4)
-            .style("fill", "orange")
-            .style("opacity", 0)
-            .transition().duration(1000)
-            .style("opacity", 0.7);
+            .style("fill", "orange");
     }
 
     // Need to define arrow marker in SVG if not exists
@@ -481,6 +509,7 @@ window.PCA = (() => {
         initializePlot,
         startVisualization,
         performNextStep,
+        performPrevStep,
         isVisualizationInProgress: () => visualizationInProgress
     };
 })();

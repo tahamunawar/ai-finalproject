@@ -3,6 +3,7 @@ window.Hierarchical = (() => {
     const startBtn = document.getElementById('start-btn');
     const nextStepBtn = document.getElementById('next-step-btn');
     const completionMessage = document.getElementById('completion-message');
+    const prevStepBtn = document.getElementById('prev-step-btn');
 
     // --- Configuration ---
     const SEED = 'unsupervised-learning-viz';
@@ -17,6 +18,7 @@ window.Hierarchical = (() => {
     let clusters = []; 
     let currentStep = 0;
     let nextColorId = 0; 
+    let history = [];
     
     // -------------------------------------------------------------------------
     // Initialization
@@ -24,6 +26,8 @@ window.Hierarchical = (() => {
 
     function initializePlot(numPoints) {
         visualizationInProgress = false;
+        history = [];
+        prevStepBtn.disabled = true;
         Math.seedrandom(SEED);
         
         // 1. Initialize Scatter Plot
@@ -94,6 +98,8 @@ window.Hierarchical = (() => {
         startBtn.disabled = false;
         nextStepBtn.disabled = true;
         completionMessage.classList.add('hidden');
+        history = [];
+        prevStepBtn.disabled = true;
     }
 
     // -------------------------------------------------------------------------
@@ -175,7 +181,7 @@ window.Hierarchical = (() => {
                 }
             }
             return maxDist;
-        } else {
+        } else { // 'average'
             let sumDist = 0;
             let count = 0;
             for (const p1 of cluster1.points) {
@@ -372,6 +378,8 @@ window.Hierarchical = (() => {
             isLeaf: true
         }));
 
+        history.push(structuredClone(clusters)); // Save initial state
+
         drawPoints();
         drawDendrogram(); 
     }
@@ -384,6 +392,9 @@ window.Hierarchical = (() => {
             completionMessage.classList.remove('hidden');
             return;
         }
+
+        history.push(structuredClone(clusters)); // Save state before the merge
+        prevStepBtn.disabled = false;
 
         nextStepBtn.disabled = true;
 
@@ -515,6 +526,36 @@ window.Hierarchical = (() => {
         }
     }
 
+    function performPrevStep() {
+        if (history.length <= 1) {
+            prevStepBtn.disabled = true;
+            return;
+        }
+
+        clusters = history.pop();
+        
+        // Find the colorId of the cluster that was just un-merged to decrement the counter
+        const maxColorId = clusters.reduce((maxId, c) => {
+            if (c.colorId !== null && c.colorId > maxId) {
+                return c.colorId;
+            }
+            return maxId;
+        }, -1);
+        nextColorId = maxColorId + 1;
+        currentStep--;
+
+
+        // Redraw without animation
+        drawPoints();
+        drawDendrogram();
+
+        if (history.length <= 1) {
+            prevStepBtn.disabled = true;
+        }
+        nextStepBtn.disabled = false;
+        completionMessage.classList.add('hidden');
+    }
+
     async function fastForward() {
         visualizationInProgress = false;
         startBtn.disabled = true;
@@ -573,6 +614,7 @@ window.Hierarchical = (() => {
         initializePlot,
         startVisualization,
         performNextStep,
+        performPrevStep,
         fastForward,
         isVisualizationInProgress: () => visualizationInProgress
     };

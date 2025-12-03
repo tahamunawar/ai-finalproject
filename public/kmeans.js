@@ -5,12 +5,14 @@ window.KMeans = (() => {
     const distanceMetricSelect = document.getElementById('distance-metric');
     const initMethodSelect = document.getElementById('init-method');
     const completionMessage = document.getElementById('completion-message');
+    const prevStepBtn = document.getElementById('prev-step-btn');
 
     const SEED = 'unsupervised-learning-viz';
     
-    let svg, data, centroids, clusters, xScale, yScale;
+    let svg, data, centroids, clusters, xScale, yScale, assignments;
     let visualizationInProgress = false;
     let iterationCount = 0;
+    let history = [];
 
     
     const colorScale = d3.scaleOrdinal()
@@ -18,6 +20,8 @@ window.KMeans = (() => {
             
     function initializePlot(numPoints) {
         visualizationInProgress = false;
+        history = [];
+        prevStepBtn.disabled = true;
         Math.seedrandom(SEED);
 
         const plot = window.Plot.initialize('plot');
@@ -32,8 +36,10 @@ window.KMeans = (() => {
 
         drawPoints(data);
 
+        // Explicitly enable start and disable others for a clean initial state
         startBtn.disabled = false;
         nextStepBtn.disabled = true;
+        prevStepBtn.disabled = true;
         completionMessage.classList.add('hidden');
     }
 
@@ -251,6 +257,8 @@ window.KMeans = (() => {
         iterationCount = 0;
         startBtn.disabled = true;
         nextStepBtn.disabled = false;
+        prevStepBtn.disabled = true;
+        history = [];
 
         // Reset random seed to ensure consistent initialization
         Math.seedrandom(SEED);
@@ -258,10 +266,27 @@ window.KMeans = (() => {
         const k = parseInt(kValueInput.value, 10);
         centroids = initializeCentroids(k);
         drawCentroids(centroids);
+
+        // Save initial state
+        assignments = new Array(data.length).fill(null);
+        history.push({ 
+            centroids: structuredClone(centroids), 
+            assignments: [...assignments],
+            iterationCount: 0
+        });
     }
 
     async function performNextStep() {
         if (!visualizationInProgress) return;
+
+        // Save CURRENT state before proceeding
+        history.push({
+            centroids: structuredClone(centroids),
+            assignments: structuredClone(assignments),
+            iterationCount
+        });
+        prevStepBtn.disabled = false;
+
         iterationCount++;
         nextStepBtn.disabled = true;
 
@@ -283,6 +308,50 @@ window.KMeans = (() => {
             completionMessage.textContent = `Algorithm converged in ${iterationCount} steps.`;
             completionMessage.classList.remove('hidden');
         }
+    }
+
+    async function performPrevStep() {
+        if (history.length <= 1) { // Can't go back from initial state
+            prevStepBtn.disabled = true;
+            return;
+        }
+
+        // Assuming stopAutoplay is defined elsewhere or will be added.
+        // For now, we'll just disable next step.
+        nextStepBtn.disabled = true; 
+
+        const prevState = history.pop();
+        
+        centroids = prevState.centroids;
+        assignments = prevState.assignments;
+        iterationCount = prevState.iterationCount;
+
+        // Redraw everything to the previous state without animation
+        drawCentroids(centroids);
+
+        const prevClusters = new Array(centroids.length).fill(0).map(() => []);
+        if (assignments) {
+            data.forEach((point, i) => {
+                if (assignments[i] !== null) {
+                    prevClusters[assignments[i]].push(point);
+                }
+            });
+        }
+        
+        drawClusterHulls(prevClusters);
+        svg.selectAll(".point")
+            .style("fill", (d, i) => {
+                if (assignments[i] !== null) {
+                    return colorScale(assignments[i]);
+                }
+                return "#555";
+            });
+
+        if (history.length <= 1) {
+            prevStepBtn.disabled = true;
+        }
+        nextStepBtn.disabled = false; // Re-enable next step
+        completionMessage.classList.add('hidden');
     }
 
     async function fastForward() {
@@ -351,6 +420,7 @@ window.KMeans = (() => {
         startVisualization,
         performNextStep,
         fastForward,
+        performPrevStep,
         isVisualizationInProgress: () => visualizationInProgress
     };
 })();

@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pcaControls = document.getElementById('pca-controls'); // Added
     const plotContainerInner = document.getElementById('plot-container-inner');
     const dendrogramDiv = document.getElementById('dendrogram');
+    const prevStepBtn = document.getElementById('prev-step-btn'); // New
     const nextStepBtn = document.getElementById('next-step-btn');
     const autoplayBtn = document.getElementById('autoplay-btn');
     const fastforwardBtn = document.getElementById('fastforward-btn');
@@ -103,9 +104,11 @@ document.addEventListener('DOMContentLoaded', () => {
             plotContainerInner.classList.remove('dbscan-view'); // Ensure DBSCAN view is off
             dendrogramDiv.classList.add('hidden');
             nextStepBtn.style.display = 'inline-block';
+            prevStepBtn.style.display = 'inline-block'; // New
             autoplayBtn.style.display = 'inline-block';
             fastforwardBtn.style.display = 'inline-block';
             autoplayBtn.disabled = true; // Disable until start is pressed
+            prevStepBtn.disabled = true; // New
             reinitializeCurrentAlgorithmPlot();
         } else if (algo === 'hierarchical') {
             mainTitle.textContent = 'Hierarchical Clustering Visualizer';
@@ -115,9 +118,11 @@ document.addEventListener('DOMContentLoaded', () => {
             plotContainerInner.classList.remove('dbscan-view'); // Ensure DBSCAN view is off
             dendrogramDiv.classList.remove('hidden');
             nextStepBtn.style.display = 'inline-block';
+            prevStepBtn.style.display = 'inline-block'; // New
             autoplayBtn.style.display = 'inline-block';
             fastforwardBtn.style.display = 'inline-block';
             autoplayBtn.disabled = true; // Disable until start is pressed
+            prevStepBtn.disabled = true; // New
             reinitializeCurrentAlgorithmPlot();
         } else if (algo === 'dbscan') {
             mainTitle.textContent = 'DBSCAN Clustering Visualizer';
@@ -127,9 +132,11 @@ document.addEventListener('DOMContentLoaded', () => {
             plotContainerInner.classList.add('dbscan-view'); // Activate special DBSCAN view
             dendrogramDiv.classList.add('hidden');
             nextStepBtn.style.display = 'inline-block'; 
+            prevStepBtn.style.display = 'inline-block'; // New
             autoplayBtn.style.display = 'inline-block';
             fastforwardBtn.style.display = 'inline-block';
             autoplayBtn.disabled = true; // Disable until start is pressed
+            prevStepBtn.disabled = true; // New
             reinitializeCurrentAlgorithmPlot();
         } else if (algo === 'pca') {
             mainTitle.textContent = 'Principal Component Analysis';
@@ -139,9 +146,11 @@ document.addEventListener('DOMContentLoaded', () => {
             plotContainerInner.classList.remove('dbscan-view'); // Ensure DBSCAN view is off
             dendrogramDiv.classList.add('hidden');
             nextStepBtn.style.display = 'inline-block';
+            prevStepBtn.style.display = 'inline-block'; // New
             autoplayBtn.style.display = 'inline-block'; // PCA can use autoplay to step through
             fastforwardBtn.style.display = 'none'; // Disable fast forward for PCA as it's about specific steps
             autoplayBtn.disabled = true;
+            prevStepBtn.disabled = true; // New
             reinitializeCurrentAlgorithmPlot();
         }
     }
@@ -184,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
         stopAutoplay(); // Stop auto-play when resetting (this also stops the guard)
         reinitializeCurrentAlgorithmPlot();
         autoplayBtn.disabled = true; // Disable auto-play until start is pressed
+        prevStepBtn.disabled = true; // Disable prev step on reset
     });
 
     function stopAutoplay() {
@@ -213,6 +223,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (isInProgress) {
                 nextStepBtn.disabled = false;
+                // Prev button should also be re-enabled if not at the start
+                // The algorithm module itself should know its state, so we won't handle it here.
             }
         }
     }
@@ -243,11 +255,13 @@ document.addEventListener('DOMContentLoaded', () => {
         isAutoplayActive = true;
         autoplayBtn.textContent = 'Stop Auto Play';
         nextStepBtn.disabled = true; // Disable manual next step during auto-play
+        prevStepBtn.disabled = true; // Disable manual prev step during auto-play
 
         // Start high-frequency guard to keep button disabled during auto-play
         autoplayButtonGuard = setInterval(() => {
             if (isAutoplayActive) {
                 nextStepBtn.disabled = true;
+                prevStepBtn.disabled = true;
             } else {
                 clearInterval(autoplayButtonGuard);
                 autoplayButtonGuard = null;
@@ -272,6 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (stillInProgress) {
                 // Ensure button stays disabled before performing step
                 nextStepBtn.disabled = true;
+                prevStepBtn.disabled = true; // Keep prev step disabled
                 
                 // Perform next step (await to ensure it completes)
                 if (activeAlgorithm === 'kmeans') await window.KMeans.performNextStep();
@@ -311,6 +326,19 @@ document.addEventListener('DOMContentLoaded', () => {
             window.DBSCAN.performNextStep();
         } else if (activeAlgorithm === 'pca') {
             window.PCA.performNextStep();
+        }
+    });
+
+    prevStepBtn.addEventListener('click', () => {
+        if (autoplayInterval) return; // Don't allow manual steps during auto-play
+        if (activeAlgorithm === 'kmeans') {
+            window.KMeans.performPrevStep();
+        } else if (activeAlgorithm === 'hierarchical') {
+            window.Hierarchical.performPrevStep();
+        } else if (activeAlgorithm === 'dbscan') {
+            window.DBSCAN.performPrevStep();
+        } else if (activeAlgorithm === 'pca') {
+            window.PCA.performPrevStep();
         }
     });
 

@@ -6,6 +6,7 @@ window.DBSCAN = (() => {
     const minPtsValueInput = document.getElementById('min-pts-value');
     const completionMessage = document.getElementById('completion-message');
     const nextStepBtn = document.getElementById('next-step-btn');
+    const prevStepBtn = document.getElementById('prev-step-btn');
 
     const SEED = 'unsupervised-learning-viz';
 
@@ -18,6 +19,7 @@ window.DBSCAN = (() => {
     let pointClusterIds = []; // To store the cluster ID for each point
     let expandingQueue = []; // New: Queue for iterative cluster expansion
     let statusText = null; // Text element to show current step status
+    let history = [];
 
     const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
     const noiseColor = "#555";
@@ -83,8 +85,8 @@ window.DBSCAN = (() => {
         visitedPoints.clear();
         currentPointIndex = 0;
         clusterIdCounter = 0;
-        expandingQueue = []; // <-- This was missing
-        visualizationInProgress = false; // Ensure this is reset too
+        history = [];
+        prevStepBtn.disabled = true;
 
         // Hide and clear the queue visualization
         document.getElementById('queue-container').classList.add('hidden');
@@ -165,6 +167,8 @@ window.DBSCAN = (() => {
         currentPointIndex = 0;
         clusterIdCounter = 0;
         expandingQueue = []; // Reset the expansion queue
+        history = [];
+        prevStepBtn.disabled = true;
         
         document.getElementById('queue-container').classList.add('hidden'); // Hide initially
         updateQueueVisualization();
@@ -176,6 +180,17 @@ window.DBSCAN = (() => {
 
     async function performNextStep() {
         if (!visualizationInProgress) return;
+        
+        // Save current state before performing the step
+        history.push({
+            currentPointIndex,
+            clusterIdCounter,
+            visitedPoints: new Set(visitedPoints),
+            pointStates: [...pointStates],
+            pointClusterIds: [...pointClusterIds],
+            expandingQueue: [...expandingQueue]
+        });
+        prevStepBtn.disabled = false;
         
         // If there's an active cluster expansion, continue it.
         if (expandingQueue.length > 0) {
@@ -284,6 +299,38 @@ window.DBSCAN = (() => {
 
         drawPoints(data); // Redraw points with updated states
         updateQueueVisualization(); // Update the queue UI
+    }
+
+    function performPrevStep() {
+        if (history.length === 0) {
+            prevStepBtn.disabled = true;
+            return;
+        }
+
+        const prevState = history.pop();
+        
+        currentPointIndex = prevState.currentPointIndex;
+        clusterIdCounter = prevState.clusterIdCounter;
+        visitedPoints = prevState.visitedPoints;
+        pointStates = prevState.pointStates;
+        pointClusterIds = prevState.pointClusterIds;
+        expandingQueue = prevState.expandingQueue;
+
+        // Clear any lingering visual artifacts from the "forward" step
+        svg.selectAll(".epsilon-circle, .current-point-highlight, .connection-line").remove();
+        
+        // Redraw the plot in its previous state
+        drawPoints(data);
+        updateQueueVisualization();
+
+        // Update status text to reflect the reverted state (optional, can be simple)
+        statusText.text("Reverted to previous step.");
+
+        if (history.length === 0) {
+            prevStepBtn.disabled = true;
+        }
+        nextStepBtn.disabled = false; // Always possible to go forward again
+        completionMessage.classList.add('hidden');
     }
 
     function updateQueueVisualization() {
@@ -540,6 +587,7 @@ window.DBSCAN = (() => {
         startVisualization,
         performNextStep,
         fastForward,
+        performPrevStep,
         isVisualizationInProgress: () => visualizationInProgress
     };
 })();
